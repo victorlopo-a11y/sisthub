@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SystemLink, DEFAULT_CATEGORIES, THEMES, ThemeId } from './types';
-import { supabase } from './lib/supabase';
+import { supabase, supabaseConfigured, supabaseConfigError } from './lib/supabase';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 // Initial demo data
@@ -67,6 +67,7 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authError, setAuthError] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
 
   // New link form state
   const [newLink, setNewLink] = useState({
@@ -78,6 +79,11 @@ export default function App() {
 
   // Auth Listener
   useEffect(() => {
+    if (!supabaseConfigured) {
+      setUser(null);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) setAppView('dashboard');
@@ -225,17 +231,36 @@ export default function App() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
+    setAuthMessage('');
     setIsSyncing(true);
 
-    const { error } = authMode === 'login' 
-      ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
-      : await supabase.auth.signUp({ email: authEmail, password: authPassword });
+    if (!supabaseConfigured) {
+      setAuthError(supabaseConfigError || 'Supabase não configurado.');
+      setIsSyncing(false);
+      return;
+    }
 
-    if (error) {
-      setAuthError(error.message);
-    } else {
-      setAuthEmail('');
-      setAuthPassword('');
+    try {
+      const { data, error } = authMode === 'login'
+        ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
+        : await supabase.auth.signUp({
+            email: authEmail,
+            password: authPassword,
+            options: { emailRedirectTo: window.location.origin },
+          });
+
+      if (error) {
+        setAuthError(error.message);
+      } else {
+        setAuthEmail('');
+        setAuthPassword('');
+        if (authMode === 'signup' && !data.session) {
+          setAuthMessage('Conta criada. Se a confirmação por e-mail estiver ativada, verifique sua caixa de entrada.');
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setAuthError(message || 'Erro ao comunicar com o servidor de autenticação.');
     }
     setIsSyncing(false);
   };
@@ -352,6 +377,7 @@ export default function App() {
                   />
                 </div>
                 
+                {authMessage && <p className="text-xs text-green-500 font-bold bg-green-500/10 p-3 rounded-xl border border-green-500/20">{authMessage}</p>}
                 {authError && <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-xl border border-red-500/20">{authError}</p>}
                 
                 <button 

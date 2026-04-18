@@ -3,11 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Lazy initialization is handled by createClient itself, 
-// but we check if variables exist to avoid cryptic errors.
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase URL or Anon Key missing. Please configure them in the Secrets panel.');
-}
+export const supabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+export const supabaseConfigError =
+  supabaseConfigured
+    ? null
+    : 'Supabase não configurado. Crie um arquivo `.env.local` com `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (veja `.env.example`).';
 
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
