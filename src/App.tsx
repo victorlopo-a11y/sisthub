@@ -61,6 +61,7 @@ export default function App() {
   const [currentThemeId, setCurrentThemeId] = useState<ThemeId>('bento-dark');
   const [isSyncing, setIsSyncing] = useState(false);
   const [appView, setAppView] = useState<'login' | 'dashboard'>('login');
+  const [brokenBgByLinkId, setBrokenBgByLinkId] = useState<Record<string, true>>({});
   
   // Auth Form
   const [authEmail, setAuthEmail] = useState('');
@@ -74,8 +75,46 @@ export default function App() {
     name: '',
     url: '',
     category: 'work',
-    description: ''
+    description: '',
+    bgImage: ''
   });
+
+  const getAutoPreviewUrl = (url: string): string | null => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+      return `https://image.thum.io/get/width/1200/${parsed.toString()}`;
+    } catch {
+      return null;
+    }
+  };
+
+  const getBgOverridesKey = (userId: string) => `sisthub_bg_overrides_${userId}`;
+
+  const loadBgOverrides = (userId: string): Record<string, string> => {
+    const raw = localStorage.getItem(getBgOverridesKey(userId));
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === 'object') return parsed as Record<string, string>;
+      return {};
+    } catch {
+      return {};
+    }
+  };
+
+  const saveBgOverride = (userId: string, linkId: string, bgImage: string) => {
+    const overrides = loadBgOverrides(userId);
+    overrides[linkId] = bgImage;
+    localStorage.setItem(getBgOverridesKey(userId), JSON.stringify(overrides));
+  };
+
+  const deleteBgOverride = (userId: string, linkId: string) => {
+    const overrides = loadBgOverrides(userId);
+    if (!overrides[linkId]) return;
+    delete overrides[linkId];
+    localStorage.setItem(getBgOverridesKey(userId), JSON.stringify(overrides));
+  };
 
   // Auth Listener
   useEffect(() => {
@@ -133,7 +172,13 @@ export default function App() {
       if (error) {
         console.error('Error fetching links:', error);
       } else {
-        setLinks(data || []);
+        const fetched = (data || []) as SystemLink[];
+        const overrides = loadBgOverrides(user.id);
+        const merged = fetched.map(link => {
+          const bgImage = overrides[link.id];
+          return bgImage && !link.bgImage ? ({ ...link, bgImage } as SystemLink) : link;
+        });
+        setLinks(merged);
       }
       setIsSyncing(false);
     };
@@ -179,6 +224,8 @@ export default function App() {
     e.preventDefault();
     if (!newLink.name || !newLink.url) return;
 
+    const bgImage = newLink.bgImage.trim();
+
     const linkPayload: any = {
       name: newLink.name,
       url: newLink.url,
@@ -188,17 +235,28 @@ export default function App() {
       createdAt: Date.now(),
     };
 
+    if (bgImage) linkPayload.bgImage = bgImage;
+
     if (user) {
       setIsSyncing(true);
-      const { data, error } = await supabase
-        .from('links')
-        .insert([linkPayload])
-        .select();
+
+      let { data, error } = await supabase.from('links').insert([linkPayload]).select();
+
+      if (error && bgImage && /bgImage/i.test(error.message) && /column|exist/i.test(error.message)) {
+        const retryPayload = { ...linkPayload };
+        delete retryPayload.bgImage;
+        ({ data, error } = await supabase.from('links').insert([retryPayload]).select());
+      }
 
       if (error) {
         console.error('Error saving link:', error);
       } else if (data) {
-        setLinks(prev => [data[0] as SystemLink, ...prev]);
+        const inserted = { ...(data[0] as SystemLink) };
+        if (bgImage && !inserted.bgImage) {
+          inserted.bgImage = bgImage;
+          saveBgOverride(user.id, inserted.id, bgImage);
+        }
+        setLinks(prev => [inserted, ...prev]);
       }
       setIsSyncing(false);
     } else {
@@ -206,7 +264,7 @@ export default function App() {
     }
 
     setIsModalOpen(false);
-    setNewLink({ name: '', url: '', category: 'work', description: '' });
+    setNewLink({ name: '', url: '', category: 'work', description: '', bgImage: '' });
   };
 
   const handleDeleteLink = async (id: string) => {
@@ -221,6 +279,7 @@ export default function App() {
         console.error('Error deleting link:', error);
       } else {
         setLinks(prev => prev.filter(l => l.id !== id));
+        deleteBgOverride(user.id, id);
       }
       setIsSyncing(false);
     } else {
@@ -547,6 +606,10 @@ export default function App() {
                   const isLarge = index === 0 && searchQuery === '' && activeCategory === 'all';
                   const isWide = (index === 1 || index === 5) && searchQuery === '';
                   const isTall = (index === 2) && searchQuery === '';
+                  const bgSrc =
+                    brokenBgByLinkId[link.id]
+                      ? null
+                      : (link.bgImage?.trim() || getAutoPreviewUrl(link.url));
                   
                   return (
                     <motion.div
@@ -565,6 +628,17 @@ export default function App() {
                           : 'bg-brand-surface border-brand-border hover:border-brand-primary'
                       }`}
                     >
+                      {bgSrc && (
+                        <img
+                          src={bgSrc}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:opacity-40 transition-opacity duration-300 pointer-events-none"
+                          onError={() => setBrokenBgByLinkId(prev => ({ ...prev, [link.id]: true }))}
+                        />
+                      )}
+                      {bgSrc && <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/0 via-black/40 to-black/80" />}
+
                       <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-300 z-10">
                         <button 
                            onClick={() => handleDeleteLink(link.id)}
@@ -575,7 +649,7 @@ export default function App() {
                         </button>
                       </div>
 
-                      <div className="flex flex-col h-full text-white">
+                      <div className="relative z-10 flex flex-col h-full text-white">
                         <div className="flex items-start justify-between mb-6">
                           <div className={`rounded-xl flex items-center justify-center transition-all duration-500 ${
                             isLarge ? 'w-16 h-16 bg-brand-primary text-white' : 'w-12 h-12 bg-brand-border text-brand-muted'
@@ -668,6 +742,10 @@ export default function App() {
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">URL</label>
                   <input required type="url" className="w-full px-5 py-4 border border-brand-border rounded-xl bg-brand-bg text-brand-primary font-mono text-sm" value={newLink.url} onChange={e => setNewLink(p => ({ ...p, url: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Imagem de Fundo (URL)</label>
+                  <input type="url" className="w-full px-5 py-4 border border-brand-border rounded-xl bg-brand-bg text-white focus:border-brand-primary outline-none" value={newLink.bgImage} onChange={e => setNewLink(p => ({ ...p, bgImage: e.target.value }))} placeholder="(opcional) deixe vazio para usar a prévia automática do site" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Descrição</label>

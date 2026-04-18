@@ -5,6 +5,7 @@ export interface SystemLink {
   category: string;
   description?: string;
   icon?: string;
+  bgImage?: string;
   userId: string;
   createdAt: number;
 }
