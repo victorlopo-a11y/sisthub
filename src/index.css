@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-brand-bg: var(--bg);
+  --color-brand-surface: var(--surface);
+  --color-brand-border: var(--border);
+  --color-brand-primary: var(--primary);
+  --color-brand-ink: var(--ink);
+  --color-brand-muted: var(--muted);
+}
+
+@layer base {
+  :root {
+    /* Default Bento Dark */
+    --bg: #09090b;
+    --surface: #18181b;
+    --border: #27272a;
+    --primary: #8b5cf6;
+    --ink: #fafafa;
+    --muted: #a1a1aa;
+  }
+
+  .theme-bento-light {
+    --bg: #f4f4f5;
+    --surface: #ffffff;
+    --border: #e4e4e7;
+    --primary: #6366f1;
+    --ink: #09090b;
+    --muted: #71717a;
+  }
+
+  .theme-midnight {
+    --bg: #020617;
+    --surface: #0f172a;
+    --border: #1e293b;
+    --primary: #38bdf8;
+    --ink: #f8fafc;
+    --muted: #94a3b8;
+  }
+
+  .theme-emerald {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --primary: #059669;
+    --ink: #0f172a;
+    --muted: #64748b;
+  }
+
+  body {
+    @apply bg-brand-bg text-brand-ink font-sans antialiased transition-colors duration-300;
+  }
+}
+
+@layer components {
+  .bento-card {
+    @apply bg-brand-surface border border-brand-border rounded-[20px] p-6 transition-all duration-300 hover:border-brand-primary;
+  }
+
+  .status-badge {
+    @apply inline-block px-2 py-1 rounded-md text-[10px] font-bold uppercase;
+  }
+  
+  .status-online {
+    @apply bg-green-500/10 text-green-500;
+  }
+  
+  .status-update {
+    @apply bg-blue-500/10 text-blue-500;
+  }
+}
+
