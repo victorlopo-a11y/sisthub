@@ -5,9 +5,9 @@ export interface SystemLink {
   category: string;
   description?: string;
   icon?: string;
-  bgImage?: string;
-  userId: string;
-  createdAt: number;
+  bg_image?: string;
+  user_id: string;
+  created_at: number;
 }
 
 export type Category = {

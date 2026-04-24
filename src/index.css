@@ -22,6 +22,7 @@
     --primary: #8b5cf6;
     --ink: #fafafa;
     --muted: #a1a1aa;
+    color-scheme: dark;
   }
 
   .theme-bento-light {
@@ -31,6 +32,7 @@
     --primary: #6366f1;
     --ink: #09090b;
     --muted: #71717a;
+    color-scheme: light;
   }
 
   .theme-midnight {
@@ -40,6 +42,7 @@
     --primary: #38bdf8;
     --ink: #f8fafc;
     --muted: #94a3b8;
+    color-scheme: dark;
   }
 
   .theme-emerald {
@@ -49,6 +52,7 @@
     --primary: #059669;
     --ink: #0f172a;
     --muted: #64748b;
+    color-scheme: light;
   }
 
   body {

@@ -32,3 +32,42 @@ View your app in AI Studio: https://ai.studio/apps/3f57b364-a05f-47f6-8652-a86bb
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
 4. Em Supabase (Auth → URL Configuration), adicione o domínio da Netlify em **Site URL** e **Redirect URLs** (para login/cadastro por e-mail).
+
+## Supabase (Banco de Dados)
+
+1. Crie um projeto no Supabase.
+2. Pegue em **Project Settings → API**:
+   - `VITE_SUPABASE_URL` (Project URL)
+   - `VITE_SUPABASE_ANON_KEY` (anon public)
+3. Em **SQL Editor**, rode:
+
+   ```sql
+   create extension if not exists pgcrypto;
+
+   create table if not exists public.links (
+     id uuid primary key default gen_random_uuid(),
+     user_id uuid not null references auth.users(id) on delete cascade,
+     name text not null,
+     url text not null,
+     category text not null,
+     description text,
+     bg_image text,
+     created_at bigint not null default ((extract(epoch from now()) * 1000)::bigint)
+   );
+
+   alter table public.links enable row level security;
+
+   create policy "links_select_own" on public.links
+     for select using (auth.uid() = user_id);
+
+   create policy "links_insert_own" on public.links
+     for insert with check (auth.uid() = user_id);
+
+   create policy "links_update_own" on public.links
+     for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+   create policy "links_delete_own" on public.links
+     for delete using (auth.uid() = user_id);
+
+   create index if not exists links_user_id_created_at_idx on public.links (user_id, created_at desc);
+   ```

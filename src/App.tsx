@@ -27,27 +27,27 @@ const DEMO_LINKS: SystemLink[] = [
     name: 'Dashboard Administrativo',
     url: 'https://admin.example.com',
     category: 'work',
-    userId: 'demo',
+    user_id: 'demo',
     description: 'Gestão principal da empresa e KPIs',
-    createdAt: Date.now(),
+    created_at: Date.now(),
   },
   {
     id: '2',
     name: 'Webmail Corporativo',
     url: 'https://mail.google.com',
     category: 'work',
-    userId: 'demo',
+    user_id: 'demo',
     description: 'Acesso rápido ao e-mail interno',
-    createdAt: Date.now(),
+    created_at: Date.now(),
   },
   {
     id: '3',
     name: 'Repositório GitHub',
     url: 'https://github.com',
     category: 'tools',
-    userId: 'demo',
+    user_id: 'demo',
     description: 'Controle de versão e CI/CD',
-    createdAt: Date.now(),
+    created_at: Date.now(),
   }
 ];
 
@@ -116,6 +116,37 @@ export default function App() {
     localStorage.setItem(getBgOverridesKey(userId), JSON.stringify(overrides));
   };
 
+  const normalizeGuestLinks = (raw: unknown): SystemLink[] => {
+    if (!Array.isArray(raw)) return DEMO_LINKS;
+    return raw
+      .map((item): SystemLink | null => {
+        if (!item || typeof item !== 'object') return null;
+        const obj = item as Record<string, unknown>;
+        const id = typeof obj.id === 'string' ? obj.id : null;
+        const name = typeof obj.name === 'string' ? obj.name : null;
+        const url = typeof obj.url === 'string' ? obj.url : null;
+        const category = typeof obj.category === 'string' ? obj.category : null;
+        if (!id || !name || !url || !category) return null;
+
+        const description = typeof obj.description === 'string' ? obj.description : undefined;
+        const bg_image =
+          typeof obj.bg_image === 'string'
+            ? obj.bg_image
+            : (typeof obj.bgImage === 'string' ? obj.bgImage : undefined);
+        const user_id =
+          typeof obj.user_id === 'string'
+            ? obj.user_id
+            : (typeof obj.userId === 'string' ? obj.userId : 'guest');
+        const created_at =
+          typeof obj.created_at === 'number'
+            ? obj.created_at
+            : (typeof obj.createdAt === 'number' ? obj.createdAt : Date.now());
+
+        return { id, name, url, category, description, bg_image, user_id, created_at };
+      })
+      .filter((v): v is SystemLink => Boolean(v));
+  };
+
   // Auth Listener
   useEffect(() => {
     if (!supabaseConfigured) {
@@ -152,7 +183,7 @@ export default function App() {
         const savedLinks = localStorage.getItem('sistemia_links');
         if (savedLinks) {
           try {
-            setLinks(JSON.parse(savedLinks));
+            setLinks(normalizeGuestLinks(JSON.parse(savedLinks)));
           } catch (e) {
             setLinks(DEMO_LINKS);
           }
@@ -166,8 +197,8 @@ export default function App() {
       const { data, error } = await supabase
         .from('links')
         .select('*')
-        .eq('userId', user.id)
-        .order('createdAt', { ascending: false });
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching links:', error);
@@ -176,7 +207,7 @@ export default function App() {
         const overrides = loadBgOverrides(user.id);
         const merged = fetched.map(link => {
           const bgImage = overrides[link.id];
-          return bgImage && !link.bgImage ? ({ ...link, bgImage } as SystemLink) : link;
+          return bgImage && !link.bg_image ? ({ ...link, bg_image: bgImage } as SystemLink) : link;
         });
         setLinks(merged);
       }
@@ -204,8 +235,13 @@ export default function App() {
   // Apply theme class
   useEffect(() => {
     localStorage.setItem('sistemia_theme', currentThemeId);
-    THEMES.forEach(t => document.body.classList.remove(`theme-${t.id}`));
+    const root = document.documentElement;
+    THEMES.forEach(t => {
+      root.classList.remove(`theme-${t.id}`);
+      document.body.classList.remove(`theme-${t.id}`);
+    });
     if (currentThemeId !== 'bento-dark') {
+      root.classList.add(`theme-${currentThemeId}`);
       document.body.classList.add(`theme-${currentThemeId}`);
     }
   }, [currentThemeId]);
@@ -231,36 +267,31 @@ export default function App() {
       url: newLink.url,
       category: newLink.category,
       description: newLink.description,
-      userId: user?.id || 'guest',
-      createdAt: Date.now(),
+      user_id: user?.id || 'guest',
+      created_at: Date.now(),
     };
 
-    if (bgImage) linkPayload.bgImage = bgImage;
+    if (bgImage) linkPayload.bg_image = bgImage;
 
     if (user) {
       setIsSyncing(true);
 
-      let { data, error } = await supabase.from('links').insert([linkPayload]).select();
-
-      if (error && bgImage && /bgImage/i.test(error.message) && /column|exist/i.test(error.message)) {
-        const retryPayload = { ...linkPayload };
-        delete retryPayload.bgImage;
-        ({ data, error } = await supabase.from('links').insert([retryPayload]).select());
-      }
+      const { data, error } = await supabase.from('links').insert([linkPayload]).select();
 
       if (error) {
         console.error('Error saving link:', error);
       } else if (data) {
         const inserted = { ...(data[0] as SystemLink) };
-        if (bgImage && !inserted.bgImage) {
-          inserted.bgImage = bgImage;
-          saveBgOverride(user.id, inserted.id, bgImage);
-        }
+        if (bgImage && !inserted.bg_image) saveBgOverride(user.id, inserted.id, bgImage);
         setLinks(prev => [inserted, ...prev]);
       }
       setIsSyncing(false);
     } else {
-      setLinks(prev => [{ ...linkPayload, id: Math.random().toString(36).substring(2, 9) } as SystemLink, ...prev]);
+      const guestLink: SystemLink = {
+        ...(linkPayload as Omit<SystemLink, 'id'>),
+        id: Math.random().toString(36).substring(2, 9),
+      };
+      setLinks(prev => [guestLink, ...prev]);
     }
 
     setIsModalOpen(false);
@@ -273,7 +304,8 @@ export default function App() {
       const { error } = await supabase
         .from('links')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) {
         console.error('Error deleting link:', error);
@@ -609,7 +641,7 @@ export default function App() {
                   const bgSrc =
                     brokenBgByLinkId[link.id]
                       ? null
-                      : (link.bgImage?.trim() || getAutoPreviewUrl(link.url));
+                      : (link.bg_image?.trim() || getAutoPreviewUrl(link.url));
                   
                   return (
                     <motion.div
